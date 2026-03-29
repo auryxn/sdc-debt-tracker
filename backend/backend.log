@@ -3,3 +3,11 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 INFO:     127.0.0.1:57444 - "GET /summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33072 - "GET /debts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33072 - "GET /summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33080 - "GET /debts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33080 - "GET /summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44184 - "OPTIONS /debts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44184 - "POST /debts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44184 - "GET /debts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44184 - "GET /summary HTTP/1.1" 200 OK
