@@ -9,7 +9,10 @@ import {
   TrendingDown, 
   Wallet, 
   History, 
-  X
+  X,
+  Users,
+  Calendar,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -35,22 +38,28 @@ interface Summary {
 
 function App() {
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [people, setPeople] = useState<string[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary>({ to_me: 0, i_owe: 0, balance: 0 });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newType, setNewType] = useState<'INCOMING' | 'OUTGOING'>('INCOMING');
   const [newDesc, setNewDesc] = useState('');
+  const [newDueDate, setNewDueDate] = useState('');
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     try {
-      const [debtsRes, summaryRes] = await Promise.all([
-        axios.get(`${API_URL}/debts`),
-        axios.get(`${API_URL}/summary`)
+      const params = selectedPerson ? { person_name: selectedPerson } : {};
+      const [debtsRes, summaryRes, peopleRes] = await Promise.all([
+        axios.get(`${API_URL}/debts`, { params }),
+        axios.get(`${API_URL}/summary`, { params }),
+        axios.get(`${API_URL}/people`)
       ]);
       setDebts(debtsRes.data);
       setSummary(summaryRes.data);
+      setPeople(peopleRes.data);
       setLoading(false);
     } catch (err) {
       console.error("Error fetching data", err);
@@ -59,7 +68,7 @@ function App() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedPerson]);
 
   const addDebt = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,11 +77,13 @@ function App() {
         person_name: newName,
         amount: parseFloat(newAmount),
         type: newType,
-        description: newDesc
+        description: newDesc,
+        due_date: newDueDate || null
       });
       setNewName('');
       setNewAmount('');
       setNewDesc('');
+      setNewDueDate('');
       setIsModalOpen(false);
       fetchData();
     } catch (err) {
@@ -89,60 +100,88 @@ function App() {
     }
   };
 
+  const isOverdue = (date: string) => {
+    if (!date) return false;
+    return new Date(date) < new Date() && new Date(date).toDateString() !== new Date().toDateString();
+  };
+
   if (loading) return <div className="loading">Initializing Julius Engine...</div>;
 
   return (
     <div className="app-container">
-      {/* Background Decor */}
       <div className="bg-glow"></div>
 
       {/* Header */}
       <header className="main-header">
-        <div className="logo-section">
+        <div className="logo-section" onClick={() => setSelectedPerson(null)} style={{ cursor: 'pointer' }}>
           <div className="logo-icon">🦾</div>
           <h1>Julius <span>Debt Tracker</span></h1>
         </div>
-        <button className="add-btn" onClick={() => setIsModalOpen(true)}>
-          <Plus size={20} /> Добавить долг
-        </button>
+        <div className="header-actions">
+           <button className="add-btn" onClick={() => setIsModalOpen(true)}>
+            <Plus size={20} /> Добавить
+          </button>
+        </div>
       </header>
+
+      {/* People Selector */}
+      <section className="people-scroll">
+        <button 
+          className={`person-chip ${selectedPerson === null ? 'active' : ''}`}
+          onClick={() => setSelectedPerson(null)}
+        >
+          Все
+        </button>
+        {people.map(p => (
+          <button 
+            key={p} 
+            className={`person-chip ${selectedPerson === p ? 'active' : ''}`}
+            onClick={() => setSelectedPerson(p)}
+          >
+            {p}
+          </button>
+        ))}
+      </section>
 
       {/* Summary Cards */}
       <section className="summary-grid">
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+          key={`to-me-${selectedPerson}`}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="card summary-card to-me"
         >
           <div className="card-header">
             <TrendingUp size={18} />
-            <span>Мне должны</span>
+            <span>{selectedPerson ? `Должен мне` : 'Мне должны'}</span>
           </div>
           <div className="amount-display">${summary.to_me.toLocaleString()}</div>
         </motion.div>
 
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+          key={`i-owe-${selectedPerson}`}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="card summary-card i-owe"
         >
           <div className="card-header">
             <TrendingDown size={18} />
-            <span>Я должен</span>
+            <span>{selectedPerson ? `Я должен` : 'Я должен'}</span>
           </div>
           <div className="amount-display">${summary.i_owe.toLocaleString()}</div>
         </motion.div>
 
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+          key={`balance-${selectedPerson}`}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="card summary-card balance"
         >
           <div className="card-header">
             <Wallet size={18} />
-            <span>Чистый Баланс</span>
+            <span>{selectedPerson ? `Сальдо с ${selectedPerson}` : 'Итоговый Баланс'}</span>
           </div>
           <div className="amount-display" style={{ color: summary.balance >= 0 ? '#10b981' : '#f43f5e' }}>
             {summary.balance >= 0 ? '+' : ''}${summary.balance.toLocaleString()}
@@ -154,17 +193,18 @@ function App() {
       <section className="list-section">
         <div className="section-title">
           <History size={20} />
-          <h2>Активные транзакции</h2>
+          <h2>{selectedPerson ? `История с ${selectedPerson}` : 'Все активные транзакции'}</h2>
         </div>
 
         <div className="debts-list">
-          <AnimatePresence>
+          <AnimatePresence mode='popLayout'>
             {debts.map((debt) => (
               <motion.div 
                 key={debt.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
+                layout
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, x: 20 }}
                 className={`debt-item ${debt.type.toLowerCase()}`}
               >
                 <div className="debt-info">
@@ -173,7 +213,17 @@ function App() {
                   </div>
                   <div className="debt-text">
                     <span className="person-name">{debt.person_name}</span>
-                    <span className="debt-date">{new Date(debt.created_at).toLocaleDateString()}</span>
+                    <div className="debt-meta">
+                      <span className="debt-date">{new Date(debt.created_at).toLocaleDateString()}</span>
+                      {debt.description && <span className="debt-desc">• {debt.description}</span>}
+                    </div>
+                    {debt.due_date && (
+                      <div className={`due-date-badge ${isOverdue(debt.due_date) ? 'overdue' : ''}`}>
+                        <Calendar size={12} />
+                        Дедлайн: {new Date(debt.due_date).toLocaleDateString()}
+                        {isOverdue(debt.due_date) && <AlertCircle size={12} style={{marginLeft: 4}} />}
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -189,7 +239,7 @@ function App() {
             ))}
           </AnimatePresence>
           {debts.length === 0 && (
-            <div className="empty-state">Долгов нет, сэр. Финансовое пространство чисто.</div>
+            <div className="empty-state">Записей не найдено, сэр.</div>
           )}
         </div>
       </section>
@@ -236,6 +286,11 @@ function App() {
                 </div>
 
                 <div className="input-group">
+                  <label>Дедлайн (опционально)</label>
+                  <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} />
+                </div>
+
+                <div className="input-group">
                   <label>Примечание</label>
                   <textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="За что?" rows={2} />
                 </div>
@@ -247,12 +302,10 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* Footer */}
       <footer className="app-footer">
-        Julius OS • Financial Management Module v1.0
+        Julius OS • Financial Management Module v1.2
       </footer>
 
-      {/* Custom Styles */}
       <style>{`
         :root {
           --bg: #0f172a;
@@ -296,7 +349,7 @@ function App() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 40px;
+          margin-bottom: 24px;
         }
 
         .logo-section h1 {
@@ -313,7 +366,36 @@ function App() {
 
         .logo-icon {
           font-size: 2rem;
-          margin-bottom: 10px;
+          margin-bottom: 5px;
+        }
+
+        .people-scroll {
+          display: flex;
+          gap: 10px;
+          overflow-x: auto;
+          padding: 10px 0 24px 0;
+          scrollbar-width: none;
+        }
+        
+        .people-scroll::-webkit-scrollbar { display: none; }
+
+        .person-chip {
+          background: var(--card);
+          border: 1px solid var(--border);
+          color: var(--text-muted);
+          padding: 8px 20px;
+          border-radius: 100px;
+          white-space: nowrap;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.875rem;
+        }
+
+        .person-chip.active {
+          background: var(--primary);
+          color: #000;
+          border-color: var(--primary);
+          font-weight: 600;
         }
 
         .add-btn {
@@ -360,7 +442,7 @@ function App() {
         }
 
         .amount-display {
-          font-size: 2rem;
+          font-size: 1.75rem;
           font-weight: 700;
         }
 
@@ -395,11 +477,12 @@ function App() {
           justify-content: space-between;
           align-items: center;
           border: 1px solid var(--border);
-          transition: border-color 0.2s;
+          transition: all 0.2s;
         }
 
         .debt-item:hover {
           border-color: var(--primary);
+          background: rgba(30, 41, 59, 0.8);
         }
 
         .debt-info {
@@ -409,9 +492,9 @@ function App() {
         }
 
         .debt-icon {
-          width: 40px;
-          height: 40px;
-          border-radius: 12px;
+          width: 44px;
+          height: 44px;
+          border-radius: 14px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -426,9 +509,29 @@ function App() {
           font-size: 1rem;
         }
 
-        .debt-date {
+        .debt-meta {
+          display: flex;
+          gap: 8px;
           font-size: 0.75rem;
           color: var(--text-muted);
+        }
+
+        .due-date-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 0.7rem;
+          padding: 2px 8px;
+          background: rgba(56, 189, 248, 0.1);
+          color: var(--primary);
+          border-radius: 6px;
+          margin-top: 6px;
+        }
+
+        .due-date-badge.overdue {
+          background: rgba(244, 63, 94, 0.1);
+          color: var(--red);
+          border: 1px solid rgba(244, 63, 94, 0.2);
         }
 
         .debt-actions {

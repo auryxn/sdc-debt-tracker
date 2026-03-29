@@ -11,3 +11,5 @@ INFO:     127.0.0.1:44184 - "OPTIONS /debts HTTP/1.1" 200 OK
 INFO:     127.0.0.1:44184 - "POST /debts HTTP/1.1" 200 OK
 INFO:     127.0.0.1:44184 - "GET /debts HTTP/1.1" 200 OK
 INFO:     127.0.0.1:44184 - "GET /summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56834 - "GET /summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56828 - "GET /debts HTTP/1.1" 200 OK

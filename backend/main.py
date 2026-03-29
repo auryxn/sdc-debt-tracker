@@ -33,6 +33,8 @@ def init_db():
             is_settled INTEGER DEFAULT 0
         )
     ''')
+    # Add index for faster lookup by person name
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_person_name ON debts(person_name)')
     conn.commit()
     conn.close()
 
@@ -64,14 +66,24 @@ def create_debt(debt: DebtCreate):
     return get_debt(debt_id)
 
 @app.get("/debts", response_model=List[Debt])
-def list_debts(include_settled: bool = False):
+def list_debts(include_settled: bool = False, person_name: Optional[str] = None):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    if include_settled:
-        cursor.execute('SELECT * FROM debts ORDER BY created_at DESC')
-    else:
-        cursor.execute('SELECT * FROM debts WHERE is_settled = 0 ORDER BY created_at DESC')
+    
+    query = 'SELECT * FROM debts WHERE 1=1'
+    params = []
+    
+    if not include_settled:
+        query += ' AND is_settled = 0'
+    
+    if person_name:
+        query += ' AND person_name = ?'
+        params.append(person_name)
+        
+    query += ' ORDER BY created_at DESC'
+    
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -98,16 +110,38 @@ def settle_debt(debt_id: int):
     return {"status": "success"}
 
 @app.get("/summary")
-def get_summary():
+def get_summary(person_name: Optional[str] = None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT SUM(amount) FROM debts WHERE type='INCOMING' AND is_settled=0")
+    
+    base_query_in = "SELECT SUM(amount) FROM debts WHERE type='INCOMING' AND is_settled=0"
+    base_query_out = "SELECT SUM(amount) FROM debts WHERE type='OUTGOING' AND is_settled=0"
+    
+    params = []
+    if person_name:
+        base_query_in += " AND person_name = ?"
+        base_query_out += " AND person_name = ?"
+        params = [person_name]
+        
+    cursor.execute(base_query_in, params)
     incoming = cursor.fetchone()[0] or 0
-    cursor.execute("SELECT SUM(amount) FROM debts WHERE type='OUTGOING' AND is_settled=0")
+    
+    cursor.execute(base_query_out, params)
     outgoing = cursor.fetchone()[0] or 0
+    
     conn.close()
     return {
+        "person_name": person_name,
         "to_me": incoming,
         "i_owe": outgoing,
         "balance": incoming - outgoing
     }
+
+@app.get("/people", response_model=List[str])
+def list_people():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT person_name FROM debts ORDER BY person_name ASC")
+    people = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return people
